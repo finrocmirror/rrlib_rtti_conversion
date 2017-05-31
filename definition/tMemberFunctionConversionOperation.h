@@ -99,12 +99,12 @@ public:
    * \param name Name of conversion operation
    */
   tMemberFunctionConversionOperation(util::tManagedConstCharPointer name) :
-    tRegisteredConversionOperation(std::move(name), cCONVERSION_OPTION)
+    tRegisteredConversionOperation(std::move(name), tDataType<TSource>(), tDataType<TDestination>(), &cCONVERSION_OPTION)
   {
   }
   template <size_t Tchars>
   tMemberFunctionConversionOperation(const char(&name)[Tchars]) :
-    tRegisteredConversionOperation(util::tManagedConstCharPointer(name, false), cCONVERSION_OPTION)
+    tRegisteredConversionOperation(util::tManagedConstCharPointer(name, false), tDataType<TSource>(), tDataType<TDestination>(), &cCONVERSION_OPTION)
   {
   }
 
@@ -142,12 +142,12 @@ public:
    * \param name Name of conversion operation
    */
   tMemberFunctionConversionOperation(util::tManagedConstCharPointer name) :
-    tRegisteredConversionOperation(std::move(name), cCONVERSION_OPTION)
+    tRegisteredConversionOperation(std::move(name), tDataType<TSource>(), tDataType<TDestination>(), &cCONVERSION_OPTION)
   {
   }
   template <size_t Tchars>
   tMemberFunctionConversionOperation(const char(&name)[Tchars]) :
-    tRegisteredConversionOperation(util::tManagedConstCharPointer(name, false), cCONVERSION_OPTION)
+    tRegisteredConversionOperation(util::tManagedConstCharPointer(name, false), tDataType<TSource>(), tDataType<TDestination>(), &cCONVERSION_OPTION)
   {
   }
 
@@ -183,12 +183,12 @@ public:
    * \param name Name of conversion operation
    */
   tMemberFunctionConversionOperation(util::tManagedConstCharPointer name) :
-    tRegisteredConversionOperation(std::move(name), cCONVERSION_OPTION)
+    tRegisteredConversionOperation(std::move(name), tDataType<TSource>(), tDataType<TDestination>(), &cCONVERSION_OPTION)
   {
   }
   template <size_t Tchars>
   tMemberFunctionConversionOperation(const char(&name)[Tchars]) :
-    tRegisteredConversionOperation(util::tManagedConstCharPointer(name, false), cCONVERSION_OPTION)
+    tRegisteredConversionOperation(util::tManagedConstCharPointer(name, false), tDataType<TSource>(), tDataType<TDestination>(), &cCONVERSION_OPTION)
   {
   }
 

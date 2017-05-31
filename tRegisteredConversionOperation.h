@@ -272,13 +272,6 @@ protected:
                                  const tConversionOption* single_conversion_option = nullptr, const tParameterDefinition& parameter = tParameterDefinition());
 
   /*!
-   * \param name Name of conversion operation (must be unique for every supported combination of source and destination types)
-   * \param single_conversion_option Single conversion option
-   * \param parameter Any parameter of conversion operation (optional)
-   */
-  tRegisteredConversionOperation(util::tManagedConstCharPointer name, const tConversionOption& single_conversion_option, const tParameterDefinition& parameter = tParameterDefinition());
-
-  /*!
    * Adds this operation to list of operations that are automatically deleted on shutdown.
    * This should only be done with operations allocated via new() and not deleted elsewhere.
    */

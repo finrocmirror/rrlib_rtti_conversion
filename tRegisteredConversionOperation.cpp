@@ -87,11 +87,6 @@ tRegisteredConversionOperation::tRegisteredConversionOperation(util::tManagedCon
   handle = static_cast<decltype(handle)>(tRegisteredConversionOperation::RegisteredOperations().operations.Add(this));
 }
 
-tRegisteredConversionOperation::tRegisteredConversionOperation(util::tManagedConstCharPointer name, const tConversionOption& single_conversion_option, const tParameterDefinition& parameter) :
-  tRegisteredConversionOperation(std::move(name), single_conversion_option.source_type, single_conversion_option.destination_type, &single_conversion_option, parameter)
-{
-}
-
 tRegisteredConversionOperation::tRegisteredConversionOperation() :
   name(cSTATIC_CAST_NAME, false),
   supported_source_types(tSupportedTypeFilter::STATIC_CAST),
