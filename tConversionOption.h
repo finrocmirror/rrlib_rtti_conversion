@@ -183,7 +183,7 @@ struct tConversionOption
   constexpr tConversionOption(const rrlib::rtti::tType& source_type, const rrlib::rtti::tType& destination_type, size_t const_offset_reference_to_source_object) :
     source_type(source_type),
     destination_type(destination_type),
-    type(tConversionOptionType::STANDARD_CONVERSION_FUNCTION),
+    type(tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT),
     const_offset_reference_to_source_object(const_offset_reference_to_source_object),
     final_conversion_function(nullptr)
   {}
@@ -194,7 +194,7 @@ struct tConversionOption
   constexpr tConversionOption(const rrlib::rtti::tType& source_type, const rrlib::rtti::tType& destination_type, tConversionFunction first_conversion_function, tGetDestinationReferenceFunction destination_reference_function) :
     source_type(source_type),
     destination_type(destination_type),
-    type(tConversionOptionType::STANDARD_CONVERSION_FUNCTION),
+    type(tConversionOptionType::VARIABLE_OFFSET_REFERENCE_TO_SOURCE_OBJECT),
     first_conversion_function(first_conversion_function),
     destination_reference_function(destination_reference_function)
   {}

@@ -138,6 +138,7 @@ public:
    * \param allow_reference_to_source May the destination object reference the source? (if not, tConversionResultType is always INDEPENDENT; an additional deep copy operation is possibly inserted)
    * \param source_type Source Type (can be omitted if first operation has fixed source type)
    * \param destination_type Destination Type (can be omitted if last operation has fixed destination type)
+   * \throw Throws exception if conversion operation sequence erroneous, ambiguous, or cannot be used to convert specified types
    */
   tCompiledConversionOperation Compile(bool allow_reference_to_source, const tType& source_type = tType(), const tType& destination_type = tType()) const;
 

@@ -471,7 +471,7 @@ serialization::tOutputStream& operator << (serialization::tOutputStream& stream,
     stream.WriteByte(flags);
     if (operation.second)
     {
-      stream << operation.second;
+      stream << *operation.second;
     }
     else
     {
