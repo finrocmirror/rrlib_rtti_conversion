@@ -284,7 +284,8 @@ tCompiledConversionOperation tConversionOperationSequence::Compile(bool allow_re
   const tConversionOption* last_conversion = conversion2 ? conversion2 : conversion1;
 
   // Do some sanity checks
-  if (conversion1->const_offset_reference_to_source_object > std::numeric_limits<unsigned int>::max() / 2 || last_conversion->const_offset_reference_to_source_object > std::numeric_limits<unsigned int>::max() / 2)
+  if ((conversion1->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT && conversion1->const_offset_reference_to_source_object > std::numeric_limits<unsigned int>::max() / 2) ||
+      (last_conversion->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT && last_conversion->const_offset_reference_to_source_object > std::numeric_limits<unsigned int>::max() / 2))
   {
     throw std::runtime_error("Invalid fixed offset in conversion option");
   }
