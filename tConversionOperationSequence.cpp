@@ -527,11 +527,13 @@ serialization::tInputStream& operator >> (serialization::tInputStream& stream, t
       }
       if (flags & cPARAMETER)
       {
-        tType type;
-        stream >> type;
-        if ((!sequence.operations[i].parameter) || (sequence.operations[i].parameter->GetType() != type))
+        if ((!sequence.operations[i].operation) || (!sequence.operations[i].operation->Parameter().GetType()))
         {
-          sequence.operations[i].parameter.reset(type.CreateGenericObject());
+          throw std::runtime_error("No parameter defined in conversion operation to deserialize");
+        }
+        if ((!sequence.operations[i].parameter))
+        {
+          sequence.operations[i].parameter.reset(sequence.operations[i].operation->Parameter().GetType().CreateGenericObject());
         }
         sequence.operations[i].parameter->Deserialize(stream);
       }
