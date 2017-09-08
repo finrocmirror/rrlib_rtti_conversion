@@ -197,11 +197,11 @@ tCompiledConversionOperation tConversionOperationSequence::Compile(bool allow_re
   }
 
   // For each operation
-  else if (first_operation == &cFOR_EACH_OPERATION)
+  else if (first_operation == &cFOR_EACH_OPERATION || first_operation == &cFOR_EACH_OPERATION_ARRAY)
   {
-    if (!(type_source.IsListType() && type_destination.IsListType()))
+    if ((first_operation == &cFOR_EACH_OPERATION && (!(type_source.IsListType() && type_destination.IsListType()))) || (first_operation == &cFOR_EACH_OPERATION_ARRAY && (!(type_source.IsArray() && type_destination.IsArray() && type_source.GetArraySize() == destination_type.GetArraySize()))))
     {
-      throw std::runtime_error("ForEach operation only applicable on list types");
+      throw std::runtime_error("ForEach operation only applicable on list types and array types (of same size)");
     }
     if (!second_operation)
     {
@@ -213,22 +213,22 @@ tCompiledConversionOperation tConversionOperationSequence::Compile(bool allow_re
     }
     else
     {
-      temp_conversion_option_2 = second_operation->GetConversionOption(type_source.GetElementType(), type_destination.GetElementType());
+      temp_conversion_option_2 = second_operation->GetConversionOption(type_source.GetElementType(), type_destination.GetElementType(), operations[1].parameter.get());
       if (temp_conversion_option_2.type == tConversionOptionType::NONE)
       {
         throw std::runtime_error("Type " + source_type.GetElementType().GetName() + " cannot be converted to " + destination_type.GetElementType().GetName() + " with the selected operations.");
       }
     }
     conversion2 = &temp_conversion_option_2;
-    temp_conversion_option_1 = cFOR_EACH_OPERATION.GetConversionOption(type_source, type_destination);
+    temp_conversion_option_1 = first_operation->GetConversionOption(type_source, type_destination, operations[0].parameter.get());
     conversion1 = &temp_conversion_option_1;
   }
 
   // Two conversion operations specified: Check types
   else if (second_operation)
   {
-    temp_conversion_option_1 = first_operation->GetConversionOption(type_source, type_intermediate);
-    temp_conversion_option_2 = second_operation->GetConversionOption(type_intermediate, type_destination);
+    temp_conversion_option_1 = first_operation->GetConversionOption(type_source, type_intermediate, operations[0].parameter.get());
+    temp_conversion_option_2 = second_operation->GetConversionOption(type_intermediate, type_destination, operations[1].parameter.get());
     if (temp_conversion_option_1.type != tConversionOptionType::NONE && temp_conversion_option_2.type != tConversionOptionType::NONE)
     {
       conversion1 = &temp_conversion_option_1;
@@ -239,7 +239,7 @@ tCompiledConversionOperation tConversionOperationSequence::Compile(bool allow_re
   // One conversion option specified: Is it enough - or do we need additional implicit cast?
   else
   {
-    temp_conversion_option_1 = first_operation->GetConversionOption(type_source, type_destination);
+    temp_conversion_option_1 = first_operation->GetConversionOption(type_source, type_destination, operations[0].parameter.get());
     if (temp_conversion_option_1.type != tConversionOptionType::NONE)
     {
       conversion1 = &temp_conversion_option_1;
@@ -250,14 +250,14 @@ tCompiledConversionOperation tConversionOperationSequence::Compile(bool allow_re
       if (first_operation->SupportedSourceTypes().single_type == source_type && (first_operation->SupportedDestinationTypes().single_type || type_intermediate))
       {
         type_intermediate = type_intermediate ? type_intermediate : first_operation->SupportedDestinationTypes().single_type;
-        temp_conversion_option_1 = first_operation->GetConversionOption(type_source, type_intermediate);
+        temp_conversion_option_1 = first_operation->GetConversionOption(type_source, type_intermediate, operations[0].parameter.get());
         temp_conversion_option_2 = tStaticCastOperation::GetImplicitConversionOption(type_intermediate, type_destination);
       }
       else if ((first_operation->SupportedSourceTypes().single_type || type_intermediate) && first_operation->SupportedDestinationTypes().single_type == destination_type)
       {
         type_intermediate = type_intermediate ? type_intermediate : first_operation->SupportedSourceTypes().single_type;
         temp_conversion_option_1 = tStaticCastOperation::GetImplicitConversionOption(type_source, type_intermediate);
-        temp_conversion_option_2 = first_operation->GetConversionOption(type_intermediate, type_destination);
+        temp_conversion_option_2 = first_operation->GetConversionOption(type_intermediate, type_destination, operations[1].parameter.get());
       }
       if (temp_conversion_option_1.type != tConversionOptionType::NONE && temp_conversion_option_2.type != tConversionOptionType::NONE)
       {

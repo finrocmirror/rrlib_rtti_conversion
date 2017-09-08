@@ -77,7 +77,7 @@ const tStaticCastOperation::tStaticCast tStaticCastOperation::tInstanceNone::val
 tStaticCastOperation::tStaticCastOperation() : tRegisteredConversionOperation()
 {}
 
-tConversionOption tStaticCastOperation::GetConversionOption(const tType& source_type, const tType& destination_type) const
+tConversionOption tStaticCastOperation::GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const
 {
   if (source_type == destination_type)
   {

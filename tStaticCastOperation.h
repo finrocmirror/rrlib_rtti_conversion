@@ -308,7 +308,7 @@ private:
    */
   static tConversionOption GetImplicitConversionOption(const rrlib::rtti::tType& source_type, const rrlib::rtti::tType& destination_type, const tRegisteredConversionOperation::tRegisteredOperations& registered_operations);
 
-  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type) const override;
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override;
 };
 
 //----------------------------------------------------------------------

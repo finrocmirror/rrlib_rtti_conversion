@@ -78,12 +78,15 @@ enum class tSupportedTypeFilter : uint8_t
   SINGLE,              //!< Only a single type is supported
   BINARY_SERIALIZABLE, //!< All binary-serializable types are supported
   STRING_SERIALIZABLE, //!< All string-serializable types are supported
+  LISTS,               //!< All list types are supported
   ALL,                 //!< All types are supported
 
   // Special operations defined in rrlib_rtti_conversion (known in Java tooling)
   STATIC_CAST,         //!< Types supported by static casts (only used for tStaticCastOperation)
   GENERIC_VECTOR_CAST, //!< Types supported by generic vector cast
-  GET_LIST_ELEMENT     //!< Types supported by get list element
+  GENERIC_ARRAY_CAST,  //!< Types supported by generic array cast
+  GET_LIST_ELEMENT,    //!< Types supported by get list element
+  GET_ARRAY_ELEMENT,   //!< Types supported by get array element
 };
 
 //----------------------------------------------------------------------
@@ -204,9 +207,10 @@ public:
    *
    * \param source_type Source Type
    * \param destination_type Destination Type
+   * \param parameter Conversion parameter (nullptr means default)
    * \return Conversion option for the specified types (result's type is tConversionOptionType::NONE if no option for specified types can be provided)
    */
-  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type) const;
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const;
 
   /*!
    * \return Local handle of operation

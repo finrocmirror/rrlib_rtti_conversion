@@ -190,7 +190,7 @@ const tRegisteredConversionOperation& tRegisteredConversionOperation::Find(const
   {
     if (name == operation->Name())
     {
-      auto option = operation->GetConversionOption(source_type, destination_type);
+      auto option = operation->GetConversionOption(source_type, destination_type, nullptr);
       if (option.type != tConversionOptionType::NONE)
       {
         if (result)
@@ -209,7 +209,7 @@ const tRegisteredConversionOperation& tRegisteredConversionOperation::Find(const
   return *result;
 }
 
-tConversionOption tRegisteredConversionOperation::GetConversionOption(const tType& source_type, const tType& destination_type) const
+tConversionOption tRegisteredConversionOperation::GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const
 {
   if ((!source_type) || (!destination_type))
   {

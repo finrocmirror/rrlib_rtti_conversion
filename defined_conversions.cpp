@@ -38,6 +38,7 @@
 // Internal includes with ""
 //----------------------------------------------------------------------
 #include "rrlib/rtti_conversion/tStaticCastOperation.h"
+#include "rrlib/rtti_conversion/definition/tVoidFunctionConversionOperation.h"
 
 //----------------------------------------------------------------------
 // Debugging
@@ -131,11 +132,16 @@ auto& cBUILTIN_TYPE_CASTS = tStaticCastOperation::
                             .Register<float, double, true, true>()
                             .Register<float, bool, true, true>()
 
-                            .Register<double, bool, true, true>();
+                            .Register<double, bool, true, true>()
+
+                            .Register<rrlib::serialization::tMemoryBuffer, std::vector<uint8_t>>();
 
 //----------------------------------------------------------------------
 // Implementation
 //----------------------------------------------------------------------
+
+namespace
+{
 
 class tToStringOperation : public tRegisteredConversionOperation
 {
@@ -143,7 +149,7 @@ public:
   tToStringOperation() : tRegisteredConversionOperation(util::tManagedConstCharPointer("ToString", false), tSupportedTypeFilter::STRING_SERIALIZABLE, tDataType<std::string>(), nullptr, tParameterDefinition("Flags", tDataType<unsigned int>(), true))
   {}
 
-  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type) const override
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
   {
     if ((source_type.GetTypeTraits() & trait_flags::cIS_STRING_SERIALIZABLE) && destination_type == tDataType<std::string>())
     {
@@ -234,7 +240,7 @@ public:
   tStringDeserializationOperation() : tRegisteredConversionOperation(util::tManagedConstCharPointer("String Deserialization", false), tDataType<std::string>(), tSupportedTypeFilter::STRING_SERIALIZABLE)
   {}
 
-  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type) const override
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
   {
     if ((destination_type.GetTypeTraits() & trait_flags::cIS_STRING_SERIALIZABLE) && source_type == tDataType<std::string>())
     {
@@ -266,7 +272,7 @@ public:
   tBinarySerializationOperation() : tRegisteredConversionOperation(util::tManagedConstCharPointer("Binary Serialization", false), tSupportedTypeFilter::BINARY_SERIALIZABLE, tDataType<serialization::tMemoryBuffer>())
   {}
 
-  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type) const override
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
   {
     if ((source_type.GetTypeTraits() & trait_flags::cIS_BINARY_SERIALIZABLE) && destination_type == tDataType<serialization::tMemoryBuffer>())
     {
@@ -297,7 +303,7 @@ public:
   tBinaryDeserializationOperation() : tRegisteredConversionOperation(util::tManagedConstCharPointer("Binary Deserialization", false), tDataType<serialization::tMemoryBuffer>(), tSupportedTypeFilter::STRING_SERIALIZABLE)
   {}
 
-  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type) const override
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
   {
     if ((destination_type.GetTypeTraits() & trait_flags::cIS_BINARY_SERIALIZABLE) && source_type == tDataType<serialization::tMemoryBuffer>())
     {
@@ -329,7 +335,7 @@ public:
   tGetListElement() : tRegisteredConversionOperation(util::tManagedConstCharPointer("[]", false), tSupportedTypeFilter::GET_LIST_ELEMENT, tSupportedTypeFilter::GET_LIST_ELEMENT, nullptr, tParameterDefinition("Index", tDataType<unsigned int>(), true))
   {}
 
-  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type) const override
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
   {
     if (source_type.IsListType() && source_type.GetElementType() == destination_type)
     {
@@ -369,7 +375,7 @@ public:
   tForEach() : tRegisteredConversionOperation(util::tManagedConstCharPointer("For Each", false), tSupportedTypeFilter::GENERIC_VECTOR_CAST, tSupportedTypeFilter::GENERIC_VECTOR_CAST)
   {}
 
-  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type) const override
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
   {
     if ((source_type.GetTypeTraits() & trait_flags::cIS_LIST_TYPE) && destination_type)
     {
@@ -410,19 +416,165 @@ public:
   }
 };
 
+class tGetArrayElement : public tRegisteredConversionOperation
+{
+public:
+  tGetArrayElement() : tRegisteredConversionOperation(util::tManagedConstCharPointer("[]", false), tSupportedTypeFilter::GET_ARRAY_ELEMENT, tSupportedTypeFilter::GET_ARRAY_ELEMENT, nullptr, tParameterDefinition("Index", tDataType<unsigned int>(), true))
+  {}
+
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
+  {
+    unsigned int index = parameter ? parameter->GetData<unsigned int>() : 0;
+    if (source_type.IsArray() && source_type.GetElementType() == destination_type && index < source_type.GetArraySize())
+    {
+      return tConversionOption(source_type, destination_type, index * source_type.GetElementType().GetSize());
+    }
+    return tConversionOption();
+  }
+};
+
+class tForEachArray : public tRegisteredConversionOperation
+{
+public:
+  tForEachArray() : tRegisteredConversionOperation(util::tManagedConstCharPointer("For Each", false), tSupportedTypeFilter::GENERIC_ARRAY_CAST, tSupportedTypeFilter::GENERIC_ARRAY_CAST)
+  {}
+
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
+  {
+    if ((source_type.GetTypeTraits() & trait_flags::cIS_ARRAY) && destination_type)
+    {
+      return tConversionOption(source_type, destination_type, false, &FirstConversionFunction, &FinalConversionFunction);
+    }
+    return tConversionOption();
+  }
+
+  static void FirstConversionFunction(const tTypedConstPointer& source_object, const tTypedPointer& destination_object, const tCurrentConversionOperation& operation)
+  {
+    tType source_type = source_object.GetType();
+    tType destination_type = destination_object.GetType();
+    size_t size = source_type.GetArraySize();
+    if (size != destination_type.GetArraySize())
+    {
+      throw std::runtime_error("Arrays must have the same size");
+    }
+
+    size_t source_element_offset = source_type.GetSize() / size;
+    size_t destination_element_offset = destination_type.GetSize() / size;
+    for (size_t i = 0; i < size; i++)
+    {
+      tTypedConstPointer source(static_cast<const char*>(source_object.GetRawDataPointer()) + i * source_element_offset, source_type);
+      tTypedPointer destination(static_cast<char*>(destination_object.GetRawDataPointer()) + i * destination_element_offset, destination_type);
+      operation.Continue(source, destination);
+    }
+  }
+
+  static void FinalConversionFunction(const tTypedConstPointer& source_object, const tTypedPointer& destination_object, const tCurrentConversionOperation& operation)
+  {
+    throw std::logic_error("Not supported as single or second operation");
+  }
+};
+
+class tWrapByteVectorOperation : public tRegisteredConversionOperation
+{
+public:
+  tWrapByteVectorOperation() : tRegisteredConversionOperation(util::tManagedConstCharPointer("Wrap", false), tDataType<std::vector<uint8_t>>(), tDataType<rrlib::serialization::tMemoryBuffer>(), &cCONVERSION_OPTION)
+  {}
+
+  static void FirstConversionFunction(const tTypedConstPointer& source_object, const tTypedPointer& destination_object, const tCurrentConversionOperation& operation)
+  {
+    const std::vector<uint8_t>& vector = *source_object.Get<std::vector<uint8_t>>();
+    if (vector.size())
+    {
+      const rrlib::serialization::tMemoryBuffer buffer(const_cast<uint8_t*>(&vector[0]), vector.size());
+      operation.Continue(tTypedConstPointer(&buffer), destination_object);
+    }
+    else
+    {
+      const rrlib::serialization::tMemoryBuffer buffer(0);
+      operation.Continue(tTypedConstPointer(&buffer), destination_object);
+    }
+  }
+
+  static void FinalConversionFunction(const tTypedConstPointer& source_object, const tTypedPointer& destination_object, const tCurrentConversionOperation& operation)
+  {
+    rrlib::serialization::tMemoryBuffer& buffer = *destination_object.Get<rrlib::serialization::tMemoryBuffer>();
+    const std::vector<uint8_t>& vector = *source_object.Get<std::vector<uint8_t>>();
+    const rrlib::serialization::tMemoryBuffer temp_buffer(const_cast<uint8_t*>(&vector[0]), vector.size());
+    buffer.CopyFrom(temp_buffer);
+  }
+
+  static constexpr tConversionOption cCONVERSION_OPTION = tConversionOption(tDataType<std::vector<uint8_t>>(), tDataType<rrlib::serialization::tMemoryBuffer>(), false, &FirstConversionFunction, &FinalConversionFunction);
+};
+
+constexpr tConversionOption tWrapByteVectorOperation::cCONVERSION_OPTION;
+
+class tListSize : public tRegisteredConversionOperation
+{
+public:
+  tListSize() : tRegisteredConversionOperation(util::tManagedConstCharPointer("size()", false), tSupportedTypeFilter::LISTS, tDataType<size_t>())
+  {}
+
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
+  {
+    if (source_type.IsListType() && destination_type == tDataType<size_t>())
+    {
+      return tConversionOption(source_type, destination_type, false, &FirstConversionFunction, &FinalConversionFunction);
+    }
+    return tConversionOption();
+  }
+
+  static void FirstConversionFunction(const tTypedConstPointer& source_object, const tTypedPointer& destination_object, const tCurrentConversionOperation& operation)
+  {
+    size_t size = source_object.GetVectorSize();
+    operation.Continue(tTypedConstPointer(&size), destination_object);
+  }
+
+  static void FinalConversionFunction(const tTypedConstPointer& source_object, const tTypedPointer& destination_object, const tCurrentConversionOperation& operation)
+  {
+    (*destination_object.Get<size_t>()) = source_object.GetVectorSize();
+  }
+};
+
+void StringToVectorConversionFunction(const std::string& source, std::vector<char>& destination)
+{
+  destination = std::vector<char>(source.begin(), source.end());
+}
+
+void VectorToStringConversionFunction(const std::vector<char>& source, std::string& destination)
+{
+  destination = std::string(source.begin(), source.end());
+}
+
 
 const tToStringOperation cTO_STRING;
-const tRegisteredConversionOperation& cTO_STRING_OPERATION = cTO_STRING;
 const tStringDeserializationOperation cSTRING_DESERIALIZATION;
-const tRegisteredConversionOperation& cSTRING_DESERIALIZATION_OPERATION = cSTRING_DESERIALIZATION;
 const tBinarySerializationOperation cBINARY_SERIALIZATION;
-const tRegisteredConversionOperation& cBINARY_SERIALIZATION_OPERATION = cBINARY_SERIALIZATION;
 const tBinaryDeserializationOperation cBINARY_DESERIALIZATION;
-const tRegisteredConversionOperation& cBINARY_DESERIALIZATION_OPERATION = cBINARY_DESERIALIZATION;
 const tGetListElement cGET_LIST_ELEMENT;
-const tRegisteredConversionOperation& cGET_LIST_ELEMENT_OPERATION = cGET_LIST_ELEMENT;
 const tForEach cFOR_EACH;
+const tGetArrayElement cGET_ARRAY_ELEMENT;
+const tForEachArray cFOR_EACH_ARRAY;
+const tWrapByteVectorOperation cWRAP_BYTE_VECTOR;
+const tListSize cLIST_SIZE;
+const tVoidFunctionConversionOperation<std::string, std::vector<char>, decltype(&StringToVectorConversionFunction), &StringToVectorConversionFunction> cSTRING_TO_VECTOR("ToVector");
+const tVoidFunctionConversionOperation<std::vector<char>, std::string, decltype(&VectorToStringConversionFunction), &VectorToStringConversionFunction> cVECTOR_TO_STRING("MakeString");
+
+}
+
+const tRegisteredConversionOperation& cTO_STRING_OPERATION = cTO_STRING;
+const tRegisteredConversionOperation& cSTRING_DESERIALIZATION_OPERATION = cSTRING_DESERIALIZATION;
+const tRegisteredConversionOperation& cBINARY_SERIALIZATION_OPERATION = cBINARY_SERIALIZATION;
+const tRegisteredConversionOperation& cBINARY_DESERIALIZATION_OPERATION = cBINARY_DESERIALIZATION;
+const tRegisteredConversionOperation& cGET_LIST_ELEMENT_OPERATION = cGET_LIST_ELEMENT;
 const tRegisteredConversionOperation& cFOR_EACH_OPERATION = cFOR_EACH;
+const tRegisteredConversionOperation& cGET_ARRAY_ELEMENT_OPERATION = cGET_ARRAY_ELEMENT;
+const tRegisteredConversionOperation& cFOR_EACH_OPERATION_ARRAY = cFOR_EACH_ARRAY;
+const tRegisteredConversionOperation& cWRAP_BYTE_VECTOR_OPERATION = cWRAP_BYTE_VECTOR;
+const tRegisteredConversionOperation& cLIST_SIZE_OPERATION = cLIST_SIZE;
+const tRegisteredConversionOperation& cSTRING_TO_VECTOR_OPERATION = cSTRING_TO_VECTOR;
+const tRegisteredConversionOperation& cMAKE_STRING_OPERATION = cVECTOR_TO_STRING;
+
+
 
 //----------------------------------------------------------------------
 // End of namespace declaration
