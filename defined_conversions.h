@@ -79,12 +79,10 @@ extern const tRegisteredConversionOperation& cSTRING_DESERIALIZATION_OPERATION; 
 extern const tRegisteredConversionOperation& cBINARY_SERIALIZATION_OPERATION;   //!< Converts any binary serializable type to serialization::tMemoryBuffer
 extern const tRegisteredConversionOperation& cBINARY_DESERIALIZATION_OPERATION; //!< Deserializes binary serializable type from serialization::tMemoryBuffer
 
-extern const tRegisteredConversionOperation& cGET_LIST_ELEMENT_OPERATION;       //!< Get Element with specified index (parameter) from list type (std::vector)
-extern const tRegisteredConversionOperation& cFOR_EACH_OPERATION;               //!< Special conversion operation for std::vectors that applies second conversion operation on all elements
-
-extern const tRegisteredConversionOperation& cGET_ARRAY_ELEMENT_OPERATION;      //!< Get Element with specified index (parameter) from array type (std::array)
-extern const tRegisteredConversionOperation& cFOR_EACH_OPERATION_ARRAY;         //!< Special conversion operation for std::arrays that applies second conversion operation on all elements
+extern const tRegisteredConversionOperation& cGET_LIST_ELEMENT_OPERATION;       //!< Get Element with specified index (parameter) from list type (std::vector) or array type (std::array)
+extern const tRegisteredConversionOperation& cFOR_EACH_OPERATION;               //!< Special conversion operation for std::vectors and std::arrays that applies second conversion operation on all elements (can convert std::vector<T> to std::vector<U>, std::array<T> to std::array<U>, and std::array<T> to std::vector<U>)
 extern const tRegisteredConversionOperation& cARRAY_TO_VECTOR_OPERATION;        //!< Converts std::array<T> to std::vector<T>
+extern const tRegisteredConversionOperation& cGET_TUPLE_ELEMENT_OPERATION;      //!< Get element of std::pair or std::tuple object
 
 extern const tRegisteredConversionOperation& cWRAP_BYTE_VECTOR_OPERATION;       //!< Converts std::vector<uint> to a MemoryBuffer. This is particulary efficient (zero-copy) when first operation in a sequence.
 extern const tRegisteredConversionOperation& cLIST_SIZE_OPERATION;              //!< Returns std::vector<T> size for any type T

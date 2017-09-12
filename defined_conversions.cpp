@@ -341,6 +341,11 @@ public:
     {
       return tConversionOption(source_type, destination_type, &FirstConversionFunction, &GetDestinationReference);
     }
+    unsigned int index = parameter ? parameter->GetData<unsigned int>() : 0;
+    if (source_type.IsArray() && source_type.GetElementType() == destination_type && index < source_type.GetArraySize())
+    {
+      return tConversionOption(source_type, destination_type, index * source_type.GetElementType().GetSize());
+    }
     return tConversionOption();
   }
 
@@ -372,12 +377,12 @@ public:
 class tForEach : public tRegisteredConversionOperation
 {
 public:
-  tForEach() : tRegisteredConversionOperation(util::tManagedConstCharPointer("For Each", false), tSupportedTypeFilter::GENERIC_VECTOR_CAST, tSupportedTypeFilter::GENERIC_VECTOR_CAST)
+  tForEach() : tRegisteredConversionOperation(util::tManagedConstCharPointer("For Each", false), tSupportedTypeFilter::FOR_EACH, tSupportedTypeFilter::FOR_EACH)
   {}
 
   virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
   {
-    if ((source_type.GetTypeTraits() & trait_flags::cIS_LIST_TYPE) && destination_type)
+    if ((source_type.IsListType() || source_type.IsArray()) && destination_type)
     {
       return tConversionOption(source_type, destination_type, false, &FirstConversionFunction, &FinalConversionFunction);
     }
@@ -386,27 +391,77 @@ public:
 
   static void FirstConversionFunction(const tTypedConstPointer& source_object, const tTypedPointer& destination_object, const tCurrentConversionOperation& operation)
   {
-    size_t size = source_object.GetVectorSize();
-    destination_object.ResizeVector(size);
-    if (size)
+    const tType& source_type = source_object.GetType();
+    const tType& destination_type = source_object.GetType();
+    size_t size = source_type.IsArray() ? source_type.GetArraySize() : source_object.GetVectorSize();
+    if (source_type.IsListType() && destination_type.IsListType())
     {
-      tTypedConstPointer source_first = source_object.GetVectorElement(0);
-      tTypedPointer destination_first = destination_object.GetVectorElement(0);
-      operation.Continue(source_first, destination_object);
-      if (size > 1)
+      destination_object.ResizeVector(size);
+      if (size)
       {
-        tTypedConstPointer source_next = source_object.GetVectorElement(1);
-        tTypedPointer destination_next = destination_object.GetVectorElement(1);
-        operation.Continue(source_next, destination_next);
-        size_t offset_source = static_cast<const char*>(source_next.GetRawDataPointer()) - static_cast<const char*>(source_first.GetRawDataPointer());
-        size_t offset_destination = static_cast<const char*>(destination_next.GetRawDataPointer()) - static_cast<const char*>(destination_first.GetRawDataPointer());
-        for (size_t i = 2; i < size; i++)
+        tTypedConstPointer source_first = source_object.GetVectorElement(0);
+        tTypedPointer destination_first = destination_object.GetVectorElement(0);
+        operation.Continue(source_first, destination_object);
+        if (size > 1)
         {
-          source_next = tTypedConstPointer(static_cast<const char*>(source_next.GetRawDataPointer()) + offset_source, source_next.GetType());
-          destination_next = tTypedPointer(static_cast<char*>(destination_next.GetRawDataPointer()) + offset_destination, destination_next.GetType());
+          tTypedConstPointer source_next = source_object.GetVectorElement(1);
+          tTypedPointer destination_next = destination_object.GetVectorElement(1);
           operation.Continue(source_next, destination_next);
+          size_t offset_source = static_cast<const char*>(source_next.GetRawDataPointer()) - static_cast<const char*>(source_first.GetRawDataPointer());
+          size_t offset_destination = static_cast<const char*>(destination_next.GetRawDataPointer()) - static_cast<const char*>(destination_first.GetRawDataPointer());
+          for (size_t i = 2; i < size; i++)
+          {
+            source_next = tTypedConstPointer(static_cast<const char*>(source_next.GetRawDataPointer()) + offset_source, source_type);
+            destination_next = tTypedPointer(static_cast<char*>(destination_next.GetRawDataPointer()) + offset_destination, destination_type);
+            operation.Continue(source_next, destination_next);
+          }
         }
       }
+    }
+    else if (source_type.IsArray() && destination_type.IsArray())
+    {
+      if (size != destination_type.GetArraySize())
+      {
+        throw std::runtime_error("Arrays must have the same size");
+      }
+
+      size_t source_element_offset = source_type.GetSize() / size;
+      size_t destination_element_offset = destination_type.GetSize() / size;
+      for (size_t i = 0; i < size; i++)
+      {
+        tTypedConstPointer source(static_cast<const char*>(source_object.GetRawDataPointer()) + i * source_element_offset, source_type);
+        tTypedPointer destination(static_cast<char*>(destination_object.GetRawDataPointer()) + i * destination_element_offset, destination_type);
+        operation.Continue(source, destination);
+      }
+    }
+    else if (source_type.IsArray() && destination_type.IsListType())
+    {
+      size_t size = source_type.GetArraySize();
+      destination_object.ResizeVector(size);
+      if (size)
+      {
+        size_t source_element_offset = source_type.GetSize() / size;
+        tTypedConstPointer source(static_cast<const char*>(source_object.GetRawDataPointer()), source_type);
+        tTypedPointer destination_first = destination_object.GetVectorElement(0);
+        operation.Continue(source, destination_object);
+        if (size > 1)
+        {
+          tTypedConstPointer source(static_cast<const char*>(source_object.GetRawDataPointer()) + source_element_offset, source_type);
+          tTypedPointer destination_next = destination_object.GetVectorElement(1);
+          operation.Continue(source, destination_next);
+          size_t offset_destination = static_cast<const char*>(destination_next.GetRawDataPointer()) - static_cast<const char*>(destination_first.GetRawDataPointer());
+          for (size_t i = 2; i < size; i++)
+          {
+            tTypedConstPointer source(static_cast<const char*>(source_object.GetRawDataPointer()) + i * source_element_offset, source_type);
+            destination_next = tTypedPointer(static_cast<char*>(destination_next.GetRawDataPointer()) + offset_destination, destination_type);
+            operation.Continue(source, destination_next);
+          }
+        }
+      }
+    }
+    else
+    {
+      throw std::runtime_error("Unsupported types for 'For Each' Operation");
     }
   }
 
@@ -416,61 +471,73 @@ public:
   }
 };
 
-class tGetArrayElement : public tRegisteredConversionOperation
+class tArrayToVector : public tRegisteredConversionOperation
 {
 public:
-  tGetArrayElement() : tRegisteredConversionOperation(util::tManagedConstCharPointer("[]", false), tSupportedTypeFilter::GET_ARRAY_ELEMENT, tSupportedTypeFilter::GET_ARRAY_ELEMENT, nullptr, tParameterDefinition("Index", tDataType<unsigned int>(), true))
+  tArrayToVector() : tRegisteredConversionOperation(util::tManagedConstCharPointer("ToVector", false), tSupportedTypeFilter::ARRAY_TO_VECTOR, tSupportedTypeFilter::ARRAY_TO_VECTOR)
+  {}
+
+  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
+  {
+    if (source_type.IsArray() && destination_type.IsListType() && source_type.GetElementType() == destination_type.GetElementType())
+    {
+      return tConversionOption(source_type, destination_type, false, &FirstConversionFunction, &FinalConversionFunction);
+    }
+    return tConversionOption();
+  }
+
+  static void FirstConversionFunction(const tTypedConstPointer& source_object, const tTypedPointer& destination_object, const tCurrentConversionOperation& operation)
+  {
+    tType inter_type = operation.compiled_operation.IntermediateType();
+    char intermediate_memory[inter_type.GetSize(true)];
+    auto intermediate_object = inter_type.EmplaceGenericObject(intermediate_memory);
+    FinalConversionFunction(source_object, *intermediate_object, operation);
+    operation.Continue(*intermediate_object, destination_object);
+  }
+
+  static void FinalConversionFunction(const tTypedConstPointer& source_object, const tTypedPointer& destination_object, const tCurrentConversionOperation& operation)
+  {
+    const tType& source_type = source_object.GetType();
+    size_t size = source_type.GetArraySize();
+    destination_object.ResizeVector(size);
+    if (size)
+    {
+      size_t source_element_offset = source_type.GetSize() / size;
+      tTypedConstPointer source(static_cast<const char*>(source_object.GetRawDataPointer()), source_type);
+      tTypedPointer destination_first = destination_object.GetVectorElement(0);
+      destination_first.DeepCopyFrom(source);
+      if (size > 1)
+      {
+        tTypedConstPointer source(static_cast<const char*>(source_object.GetRawDataPointer()) + source_element_offset, source_type);
+        tTypedPointer destination_next = destination_object.GetVectorElement(1);
+        destination_next.DeepCopyFrom(source);
+        size_t offset_destination = static_cast<const char*>(destination_next.GetRawDataPointer()) - static_cast<const char*>(destination_first.GetRawDataPointer());
+        for (size_t i = 2; i < size; i++)
+        {
+          tTypedConstPointer source(static_cast<const char*>(source_object.GetRawDataPointer()) + i * source_element_offset, source_type);
+          destination_next = tTypedPointer(static_cast<char*>(destination_next.GetRawDataPointer()) + offset_destination, destination_next.GetType());
+          destination_next.DeepCopyFrom(source);
+        }
+      }
+    }
+  }
+};
+
+class tGetTupleElement : public tRegisteredConversionOperation
+{
+public:
+  tGetTupleElement() : tRegisteredConversionOperation(util::tManagedConstCharPointer("get", false), tSupportedTypeFilter::GET_TUPLE_ELEMENT, tSupportedTypeFilter::GET_TUPLE_ELEMENT, nullptr, tParameterDefinition("Index", tDataType<unsigned int>(), true))
   {}
 
   virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
   {
     unsigned int index = parameter ? parameter->GetData<unsigned int>() : 0;
-    if (source_type.IsArray() && source_type.GetElementType() == destination_type && index < source_type.GetArraySize())
+    auto tuple_types = source_type.GetTupleTypes();
+    if (index < tuple_types.second && destination_type == tType(tuple_types.first[index].type_info))
     {
-      return tConversionOption(source_type, destination_type, index * source_type.GetElementType().GetSize());
+      return tConversionOption(source_type, destination_type, tuple_types.first[index].offset);
     }
     return tConversionOption();
-  }
-};
-
-class tForEachArray : public tRegisteredConversionOperation
-{
-public:
-  tForEachArray() : tRegisteredConversionOperation(util::tManagedConstCharPointer("For Each", false), tSupportedTypeFilter::GENERIC_ARRAY_CAST, tSupportedTypeFilter::GENERIC_ARRAY_CAST)
-  {}
-
-  virtual tConversionOption GetConversionOption(const tType& source_type, const tType& destination_type, const tGenericObject* parameter) const override
-  {
-    if ((source_type.GetTypeTraits() & trait_flags::cIS_ARRAY) && destination_type)
-    {
-      return tConversionOption(source_type, destination_type, false, &FirstConversionFunction, &FinalConversionFunction);
-    }
-    return tConversionOption();
-  }
-
-  static void FirstConversionFunction(const tTypedConstPointer& source_object, const tTypedPointer& destination_object, const tCurrentConversionOperation& operation)
-  {
-    tType source_type = source_object.GetType();
-    tType destination_type = destination_object.GetType();
-    size_t size = source_type.GetArraySize();
-    if (size != destination_type.GetArraySize())
-    {
-      throw std::runtime_error("Arrays must have the same size");
-    }
-
-    size_t source_element_offset = source_type.GetSize() / size;
-    size_t destination_element_offset = destination_type.GetSize() / size;
-    for (size_t i = 0; i < size; i++)
-    {
-      tTypedConstPointer source(static_cast<const char*>(source_object.GetRawDataPointer()) + i * source_element_offset, source_type);
-      tTypedPointer destination(static_cast<char*>(destination_object.GetRawDataPointer()) + i * destination_element_offset, destination_type);
-      operation.Continue(source, destination);
-    }
-  }
-
-  static void FinalConversionFunction(const tTypedConstPointer& source_object, const tTypedPointer& destination_object, const tCurrentConversionOperation& operation)
-  {
-    throw std::logic_error("Not supported as single or second operation");
   }
 };
 
@@ -550,10 +617,12 @@ const tToStringOperation cTO_STRING;
 const tStringDeserializationOperation cSTRING_DESERIALIZATION;
 const tBinarySerializationOperation cBINARY_SERIALIZATION;
 const tBinaryDeserializationOperation cBINARY_DESERIALIZATION;
+
 const tGetListElement cGET_LIST_ELEMENT;
 const tForEach cFOR_EACH;
-const tGetArrayElement cGET_ARRAY_ELEMENT;
-const tForEachArray cFOR_EACH_ARRAY;
+const tArrayToVector cARRAY_TO_VECTOR;
+const tGetTupleElement cGET_TUPLE_ELEMENT;
+
 const tWrapByteVectorOperation cWRAP_BYTE_VECTOR;
 const tListSize cLIST_SIZE;
 const tVoidFunctionConversionOperation<std::string, std::vector<char>, decltype(&StringToVectorConversionFunction), &StringToVectorConversionFunction> cSTRING_TO_VECTOR("ToVector");
@@ -565,10 +634,12 @@ const tRegisteredConversionOperation& cTO_STRING_OPERATION = cTO_STRING;
 const tRegisteredConversionOperation& cSTRING_DESERIALIZATION_OPERATION = cSTRING_DESERIALIZATION;
 const tRegisteredConversionOperation& cBINARY_SERIALIZATION_OPERATION = cBINARY_SERIALIZATION;
 const tRegisteredConversionOperation& cBINARY_DESERIALIZATION_OPERATION = cBINARY_DESERIALIZATION;
+
 const tRegisteredConversionOperation& cGET_LIST_ELEMENT_OPERATION = cGET_LIST_ELEMENT;
 const tRegisteredConversionOperation& cFOR_EACH_OPERATION = cFOR_EACH;
-const tRegisteredConversionOperation& cGET_ARRAY_ELEMENT_OPERATION = cGET_ARRAY_ELEMENT;
-const tRegisteredConversionOperation& cFOR_EACH_OPERATION_ARRAY = cFOR_EACH_ARRAY;
+const tRegisteredConversionOperation& cARRAY_TO_VECTOR_OPERATION = cARRAY_TO_VECTOR;
+const tRegisteredConversionOperation& cGET_TUPLE_ELEMENT_OPERATION = cGET_TUPLE_ELEMENT;
+
 const tRegisteredConversionOperation& cWRAP_BYTE_VECTOR_OPERATION = cWRAP_BYTE_VECTOR;
 const tRegisteredConversionOperation& cLIST_SIZE_OPERATION = cLIST_SIZE;
 const tRegisteredConversionOperation& cSTRING_TO_VECTOR_OPERATION = cSTRING_TO_VECTOR;

@@ -197,11 +197,13 @@ tCompiledConversionOperation tConversionOperationSequence::Compile(bool allow_re
   }
 
   // For each operation
-  else if (first_operation == &cFOR_EACH_OPERATION || first_operation == &cFOR_EACH_OPERATION_ARRAY)
+  else if (first_operation == &cFOR_EACH_OPERATION)
   {
-    if ((first_operation == &cFOR_EACH_OPERATION && (!(type_source.IsListType() && type_destination.IsListType()))) || (first_operation == &cFOR_EACH_OPERATION_ARRAY && (!(type_source.IsArray() && type_destination.IsArray() && type_source.GetArraySize() == destination_type.GetArraySize()))))
+    if (!((type_source.IsListType() && type_destination.IsListType()) ||
+          (type_source.IsArray() && type_destination.IsArray() && type_source.GetArraySize() == destination_type.GetArraySize()) ||
+          (type_source.IsArray() && type_destination.IsListType())))
     {
-      throw std::runtime_error("ForEach operation only applicable on list types and array types (of same size)");
+      throw std::runtime_error("ForEach operation only applicable on list types and array types");
     }
     if (!second_operation)
     {
