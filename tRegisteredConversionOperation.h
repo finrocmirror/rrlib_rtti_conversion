@@ -221,6 +221,14 @@ public:
   }
 
   /*!
+   * \return Handle of conversion operation that this one is not usually combined with (0xFFFF if there is no such operation)
+   */
+  uint16_t GetNotUsuallyCombinedWithHandle() const
+  {
+    return not_usually_combined_with_handle;
+  }
+
+  /*!
    * \return Registered type conversion operations.
    */
   static const tRegisteredOperations& GetRegisteredOperations()
@@ -271,9 +279,11 @@ protected:
    * \param supported_destination_types Supported destination types
    * \param single_conversion_option If operation provides only a single conversion option - points to this option (otherwise override GetConversionOptions())
    * \param parameter Any parameter of conversion operation (optional)
+   * \param not_usually_combined_with Conversion operation that this one is not usually combined with (a deprecated combination if you want)
    */
   tRegisteredConversionOperation(util::tManagedConstCharPointer name, const tSupportedTypes& supported_source_types, const tSupportedTypes& supported_destination_types,
-                                 const tConversionOption* single_conversion_option = nullptr, const tParameterDefinition& parameter = tParameterDefinition());
+                                 const tConversionOption* single_conversion_option = nullptr, const tParameterDefinition& parameter = tParameterDefinition(),
+                                 const tRegisteredConversionOperation* not_usually_combined_with = nullptr);
 
   /*!
    * Adds this operation to list of operations that are automatically deleted on shutdown.
@@ -302,6 +312,9 @@ private:
 
   /*! Local handle of operation */
   uint16_t handle;
+
+  /*! Handle of conversion operation that this one is not usually combined with (0xFFFF if there is no such operation) */
+  uint16_t not_usually_combined_with_handle;
 
 
   /*! constructor for tStaticCastOperation */

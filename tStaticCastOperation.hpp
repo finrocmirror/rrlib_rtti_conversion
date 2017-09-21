@@ -70,7 +70,7 @@ template <typename TSource, typename TDestination>
 constexpr tStaticCastOperation::tStaticCast tStaticCastOperation::tInstanceDeepCopy<TSource, TDestination>::value;
 
 template <typename TSource, typename TDestination>
-const tStaticCastOperation::tStaticCast tStaticCastOperation::tInstanceReferenceStaticOffset<TSource, TDestination>::value({ tConversionOption(tDataType<TSource>(), tDataType<TDestination>(), StaticCastReferencesSourceWithVariableOffset<TSource, TDestination>::value, ComputePointerSourceOffset()) }, IsImplicitlyConvertible<TDestination, TSource>::value);
+const tStaticCastOperation::tStaticCast tStaticCastOperation::tInstanceReferenceStaticOffset<TSource, TDestination>::value({ tConversionOption(tDataType<TSource>(), tDataType<TDestination>(), ComputePointerSourceOffset()), IsImplicitlyConvertible<TDestination, TSource>::value });
 
 template <typename TSource, typename TDestination>
 constexpr tStaticCastOperation::tStaticCast tStaticCastOperation::tInstanceReferenceVariableOffset<TSource, TDestination>::value;

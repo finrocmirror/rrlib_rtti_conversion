@@ -125,8 +125,8 @@ class tStaticCastOperation : public tRegisteredConversionOperation
 
     static size_t ComputePointerSourceOffset()
     {
-      const TSource source_object;
-      const TDestination& returned_object = static_cast<TDestination&>(source_object);
+      const TSource source_object = TSource();
+      const TDestination& returned_object = static_cast<const TDestination&>(source_object);
       size_t difference = reinterpret_cast<const char*>(&returned_object) - reinterpret_cast<const char*>(&source_object);
       assert(difference + sizeof(TDestination) <= sizeof(TSource));
       return difference;

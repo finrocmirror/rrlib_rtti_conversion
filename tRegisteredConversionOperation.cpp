@@ -73,12 +73,13 @@ const char* tRegisteredConversionOperation::cSTATIC_CAST_NAME = "static_cast";
 //----------------------------------------------------------------------
 
 tRegisteredConversionOperation::tRegisteredConversionOperation(util::tManagedConstCharPointer name, const tSupportedTypes& supported_source_types, const tSupportedTypes& supported_destination_types,
-    const tConversionOption* single_conversion_option, const tParameterDefinition& parameter) :
+    const tConversionOption* single_conversion_option, const tParameterDefinition& parameter, const tRegisteredConversionOperation* not_usually_combined_with) :
   name(std::move(name)),
   supported_source_types(supported_source_types),
   supported_destination_types(supported_destination_types),
   parameter(parameter),
-  single_conversion_option(single_conversion_option)
+  single_conversion_option(single_conversion_option),
+  not_usually_combined_with_handle(not_usually_combined_with ? not_usually_combined_with->GetHandle() : 0xFFFF)
 {
   if (parameter && (!(parameter.GetType().GetTypeTraits() & trait_flags::cIS_STRING_SERIALIZABLE)))
   {
@@ -93,7 +94,8 @@ tRegisteredConversionOperation::tRegisteredConversionOperation() :
   supported_destination_types(tSupportedTypeFilter::STATIC_CAST),
   parameter(),
   single_conversion_option(nullptr),
-  handle(-1)
+  handle(-1),
+  not_usually_combined_with_handle(0xFFFF)
 {
   handle = static_cast<decltype(handle)>(tRegisteredConversionOperation::RegisteredOperations().operations.Add(this));
 }
@@ -190,7 +192,8 @@ const tRegisteredConversionOperation& tRegisteredConversionOperation::Find(const
   {
     if (name == operation->Name())
     {
-      auto option = operation->GetConversionOption(source_type, destination_type, nullptr);
+      auto option = operation->GetConversionOption((!source_type) && operation->SupportedSourceTypes().filter == tSupportedTypeFilter::SINGLE ? operation->SupportedSourceTypes().single_type : source_type,
+                    (!destination_type) && operation->SupportedDestinationTypes().filter == tSupportedTypeFilter::SINGLE ? operation->SupportedDestinationTypes().single_type : destination_type, nullptr);
       if (option.type != tConversionOptionType::NONE)
       {
         if (result)

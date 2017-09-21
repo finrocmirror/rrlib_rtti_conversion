@@ -70,7 +70,7 @@ const tConversionOperationSequence tConversionOperationSequence::cNONE;
 const tTypedConstPointer tConversionOperationSequence::cNO_PARAMETER_VALUE;
 
 /*! Enum for binary serialization */
-enum tOperationSerializationFlags : uint8_t { cFULL_OPERATION = 1, cPARAMETER = 2 };
+enum tOperationSerializationFlags : uint8_t { cFULL_OPERATION = 1, cPARAMETER = 2, cSTRING_PARAMETER = 4 };
 
 //----------------------------------------------------------------------
 // Implementation
@@ -124,7 +124,7 @@ tCompiledConversionOperation tConversionOperationSequence::Compile(bool allow_re
   const tRegisteredConversionOperation* second_operation = operations[1].operation;
   if (second_operation && ambiguous_operation_lookup[1])
   {
-    second_operation = &tRegisteredConversionOperation::Find(first_operation->Name(), intermediate_type, destination_type);
+    second_operation = &tRegisteredConversionOperation::Find(second_operation->Name(), intermediate_type, destination_type);
   }
 
   // ############
@@ -297,6 +297,7 @@ tCompiledConversionOperation tConversionOperationSequence::Compile(bool allow_re
   result.operations[0].operation = first_operation;
   result.operations[1].operation = second_operation;
   result.destination_type = last_conversion->destination_type;
+  static_cast<tConversionOperationSequence&>(result).intermediate_type = this->intermediate_type;
 
   // Handle special case: only const offsets
   if (conversion1->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT && last_conversion->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT)
@@ -305,109 +306,110 @@ tCompiledConversionOperation tConversionOperationSequence::Compile(bool allow_re
     result.intermediate_type = result.destination_type;
     result.fixed_offset_first = static_cast<unsigned int>(conversion1->const_offset_reference_to_source_object + (conversion2 ? conversion2->const_offset_reference_to_source_object : 0));
     result.flags = tFlag::cRESULT_INDEPENDENT | tFlag::cRESULT_REFERENCES_SOURCE_DIRECTLY | tFlag::cDEEPCOPY_ONLY;
-    return result;
   }
+  else
+  {
+    // Handle cases where first operation is const offset
+    bool first_op_is_const_offset = conversion1->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT;
+    result.type_after_first_fixed_offset = first_op_is_const_offset ? conversion1->destination_type : conversion1->source_type;
+    if (first_op_is_const_offset)
+    {
+      result.fixed_offset_first = static_cast<unsigned int>(conversion1->const_offset_reference_to_source_object);
 
-  // Handle cases where first operation is const offset
-  bool first_op_is_const_offset = conversion1->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT;
-  result.type_after_first_fixed_offset = first_op_is_const_offset ? conversion1->destination_type : conversion1->source_type;
-  if (first_op_is_const_offset)
-  {
-    result.fixed_offset_first = static_cast<unsigned int>(conversion1->const_offset_reference_to_source_object);
+      // first operation is done, so move second to first
+      conversion1 = nullptr;
+      std::swap(conversion1, conversion2);
+      result.flags |= tFlag::cFIRST_OPERATION_OPTIMIZED_AWAY;
+    }
+    result.intermediate_type = conversion1->destination_type;
 
-    // first operation is done, so move second to first
-    conversion1 = nullptr;
-    std::swap(conversion1, conversion2);
-    result.flags |= tFlag::cFIRST_OPERATION_OPTIMIZED_AWAY;
-  }
-  result.intermediate_type = conversion1->destination_type;
-
-  // Single operation REFERENCES_SOURCE
-  if (conversion1->type == tConversionOptionType::RESULT_REFERENCES_SOURCE_OBJECT && (!conversion2))
-  {
-    result.conversion_function_first = allow_reference_to_source ? conversion1->final_conversion_function : conversion1->first_conversion_function;
-    result.flags = allow_reference_to_source ? tFlag::cRESULT_REFERENCES_SOURCE_INTERNALLY : (tFlag::cRESULT_INDEPENDENT | tFlag::cDO_FINAL_DEEPCOPY_AFTER_FIRST_FUNCTION);
-  }
-  // First operation is standard or REFERENCES_SOURCE
-  else if (conversion1->type == tConversionOptionType::STANDARD_CONVERSION_FUNCTION || conversion1->type == tConversionOptionType::RESULT_REFERENCES_SOURCE_OBJECT)
-  {
-    result.conversion_function_first = conversion2 ? conversion1->first_conversion_function : conversion1->final_conversion_function;
-    result.flags = tFlag::cRESULT_INDEPENDENT;
-    if (conversion2 && conversion2->type == tConversionOptionType::STANDARD_CONVERSION_FUNCTION)
+    // Single operation REFERENCES_SOURCE
+    if (conversion1->type == tConversionOptionType::RESULT_REFERENCES_SOURCE_OBJECT && (!conversion2))
     {
-      result.conversion_function_final = conversion2->final_conversion_function;
+      result.conversion_function_first = allow_reference_to_source ? conversion1->final_conversion_function : conversion1->first_conversion_function;
+      result.flags = allow_reference_to_source ? tFlag::cRESULT_REFERENCES_SOURCE_INTERNALLY : (tFlag::cRESULT_INDEPENDENT | tFlag::cDO_FINAL_DEEPCOPY_AFTER_FIRST_FUNCTION);
     }
-    else if (conversion2 && conversion2->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT)
+    // First operation is standard or REFERENCES_SOURCE
+    else if (conversion1->type == tConversionOptionType::STANDARD_CONVERSION_FUNCTION || conversion1->type == tConversionOptionType::RESULT_REFERENCES_SOURCE_OBJECT)
     {
-      if (conversion2->const_offset_reference_to_source_object == 0 && conversion2->source_type == conversion2->destination_type && (conversion1->type == tConversionOptionType::STANDARD_CONVERSION_FUNCTION || allow_reference_to_source))
+      result.conversion_function_first = conversion2 ? conversion1->first_conversion_function : conversion1->final_conversion_function;
+      result.flags = tFlag::cRESULT_INDEPENDENT;
+      if (conversion2 && conversion2->type == tConversionOptionType::STANDARD_CONVERSION_FUNCTION)
       {
-        result.conversion_function_first =  conversion1->final_conversion_function; // second operation can be optimized away
-        result.intermediate_type = result.destination_type;
-        if (conversion1->type == tConversionOptionType::RESULT_REFERENCES_SOURCE_OBJECT)
-        {
-          assert(allow_reference_to_source);
-          result.flags = tFlag::cRESULT_REFERENCES_SOURCE_INTERNALLY;
-        }
-      }
-      else
-      {
-        result.flags |= tFlag::cDO_FINAL_DEEPCOPY_AFTER_FIRST_FUNCTION;
-        result.fixed_offset_final = conversion2->const_offset_reference_to_source_object;
-      }
-    }
-    else if (conversion2 && (conversion2->type == tConversionOptionType::VARIABLE_OFFSET_REFERENCE_TO_SOURCE_OBJECT || conversion2->type == tConversionOptionType::RESULT_REFERENCES_SOURCE_OBJECT))
-    {
-      result.conversion_function_final = conversion2->first_conversion_function;
-      result.flags |= tFlag::cDO_FINAL_DEEPCOPY_AFTER_SECOND_FUNCTION;
-    }
-  }
-  // First operation is variable offset
-  else if (conversion1->type == tConversionOptionType::VARIABLE_OFFSET_REFERENCE_TO_SOURCE_OBJECT)
-  {
-    bool reference_result = allow_reference_to_source && ((!conversion2) || conversion2->type != tConversionOptionType::STANDARD_CONVERSION_FUNCTION);
-    if (reference_result)
-    {
-      if (conversion2 && conversion2->type == tConversionOptionType::RESULT_REFERENCES_SOURCE_OBJECT)
-      {
-        result.flags |= tFlag::cRESULT_REFERENCES_SOURCE_INTERNALLY;
-        result.conversion_function_first = conversion1->first_conversion_function;
         result.conversion_function_final = conversion2->final_conversion_function;
       }
-      else
+      else if (conversion2 && conversion2->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT)
       {
-        result.flags |= tFlag::cRESULT_REFERENCES_SOURCE_DIRECTLY;
-        result.get_destination_reference_function_first = conversion2->destination_reference_function;
-        if (conversion2 && conversion2->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT)
+        if (conversion2->const_offset_reference_to_source_object == 0 && conversion2->source_type == conversion2->destination_type && (conversion1->type == tConversionOptionType::STANDARD_CONVERSION_FUNCTION || allow_reference_to_source))
         {
+          result.conversion_function_first =  conversion1->final_conversion_function; // second operation can be optimized away
+          result.intermediate_type = result.destination_type;
+          if (conversion1->type == tConversionOptionType::RESULT_REFERENCES_SOURCE_OBJECT)
+          {
+            assert(allow_reference_to_source);
+            result.flags = tFlag::cRESULT_REFERENCES_SOURCE_INTERNALLY;
+          }
+        }
+        else
+        {
+          result.flags |= tFlag::cDO_FINAL_DEEPCOPY_AFTER_FIRST_FUNCTION;
           result.fixed_offset_final = conversion2->const_offset_reference_to_source_object;
         }
-        else if (conversion2 && conversion2->type == tConversionOptionType::VARIABLE_OFFSET_REFERENCE_TO_SOURCE_OBJECT)
-        {
-          result.get_destination_reference_function_final = conversion2->destination_reference_function;
-        }
-      }
-    }
-    else
-    {
-      result.conversion_function_first = conversion1->first_conversion_function;
-      result.flags |= tFlag::cRESULT_INDEPENDENT;
-      if (!conversion2)
-      {
-        result.flags |= tFlag::cDO_FINAL_DEEPCOPY_AFTER_FIRST_FUNCTION;
-      }
-      else if (conversion2->type == tConversionOptionType::STANDARD_CONVERSION_FUNCTION)
-      {
-        result.conversion_function_final = conversion2->final_conversion_function;
-      }
-      else if (conversion2->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT)
-      {
-        result.flags |= tFlag::cDO_FINAL_DEEPCOPY_AFTER_FIRST_FUNCTION;
-        result.fixed_offset_final = conversion2->const_offset_reference_to_source_object;
       }
       else if (conversion2 && (conversion2->type == tConversionOptionType::VARIABLE_OFFSET_REFERENCE_TO_SOURCE_OBJECT || conversion2->type == tConversionOptionType::RESULT_REFERENCES_SOURCE_OBJECT))
       {
         result.conversion_function_final = conversion2->first_conversion_function;
         result.flags |= tFlag::cDO_FINAL_DEEPCOPY_AFTER_SECOND_FUNCTION;
+      }
+    }
+    // First operation is variable offset
+    else if (conversion1->type == tConversionOptionType::VARIABLE_OFFSET_REFERENCE_TO_SOURCE_OBJECT)
+    {
+      bool reference_result = allow_reference_to_source && ((!conversion2) || conversion2->type != tConversionOptionType::STANDARD_CONVERSION_FUNCTION);
+      if (reference_result)
+      {
+        if (conversion2 && conversion2->type == tConversionOptionType::RESULT_REFERENCES_SOURCE_OBJECT)
+        {
+          result.flags |= tFlag::cRESULT_REFERENCES_SOURCE_INTERNALLY;
+          result.conversion_function_first = conversion1->first_conversion_function;
+          result.conversion_function_final = conversion2->final_conversion_function;
+        }
+        else
+        {
+          result.flags |= tFlag::cRESULT_REFERENCES_SOURCE_DIRECTLY;
+          result.get_destination_reference_function_first = conversion2->destination_reference_function;
+          if (conversion2 && conversion2->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT)
+          {
+            result.fixed_offset_final = conversion2->const_offset_reference_to_source_object;
+          }
+          else if (conversion2 && conversion2->type == tConversionOptionType::VARIABLE_OFFSET_REFERENCE_TO_SOURCE_OBJECT)
+          {
+            result.get_destination_reference_function_final = conversion2->destination_reference_function;
+          }
+        }
+      }
+      else
+      {
+        result.conversion_function_first = conversion1->first_conversion_function;
+        result.flags |= tFlag::cRESULT_INDEPENDENT;
+        if (!conversion2)
+        {
+          result.flags |= tFlag::cDO_FINAL_DEEPCOPY_AFTER_FIRST_FUNCTION;
+        }
+        else if (conversion2->type == tConversionOptionType::STANDARD_CONVERSION_FUNCTION)
+        {
+          result.conversion_function_final = conversion2->final_conversion_function;
+        }
+        else if (conversion2->type == tConversionOptionType::CONST_OFFSET_REFERENCE_TO_SOURCE_OBJECT)
+        {
+          result.flags |= tFlag::cDO_FINAL_DEEPCOPY_AFTER_FIRST_FUNCTION;
+          result.fixed_offset_final = conversion2->const_offset_reference_to_source_object;
+        }
+        else if (conversion2 && (conversion2->type == tConversionOptionType::VARIABLE_OFFSET_REFERENCE_TO_SOURCE_OBJECT || conversion2->type == tConversionOptionType::RESULT_REFERENCES_SOURCE_OBJECT))
+        {
+          result.conversion_function_final = conversion2->first_conversion_function;
+          result.flags |= tFlag::cDO_FINAL_DEEPCOPY_AFTER_SECOND_FUNCTION;
+        }
       }
     }
   }
@@ -470,7 +472,7 @@ serialization::tOutputStream& operator << (serialization::tOutputStream& stream,
   {
     auto operation = sequence[i];
     auto parameter_value = sequence.GetParameterValue(i);
-    uint8_t flags = (operation.second ? cFULL_OPERATION : 0) | (parameter_value ? cPARAMETER : 0);
+    uint8_t flags = (operation.second ? cFULL_OPERATION : 0) | (parameter_value && operation.second && parameter_value.GetType() == operation.second->Parameter().GetType() ? cPARAMETER : (parameter_value ? cSTRING_PARAMETER : 0));
     stream.WriteByte(flags);
     if (operation.second)
     {
@@ -481,9 +483,14 @@ serialization::tOutputStream& operator << (serialization::tOutputStream& stream,
       assert(operation.first);
       stream << operation.first;
     }
-    if (parameter_value)
+    if (flags & cPARAMETER)
     {
       parameter_value.Serialize(stream);
+    }
+    else if (flags & cSTRING_PARAMETER)
+    {
+      assert(parameter_value.GetType() == tDataType<std::string>());
+      stream << *parameter_value.Get<std::string>();
     }
   }
   if (sequence.Size() > 1)
@@ -533,11 +540,23 @@ serialization::tInputStream& operator >> (serialization::tInputStream& stream, t
         {
           throw std::runtime_error("No parameter defined in conversion operation to deserialize");
         }
-        if ((!sequence.operations[i].parameter))
+        if ((!sequence.operations[i].parameter) || sequence.operations[i].parameter->GetType() != sequence.operations[i].operation->Parameter().GetType())
         {
           sequence.operations[i].parameter.reset(sequence.operations[i].operation->Parameter().GetType().CreateGenericObject());
         }
         sequence.operations[i].parameter->Deserialize(stream);
+      }
+      else if (flags & cSTRING_PARAMETER)
+      {
+        if (!sequence.operations[i].operation)
+        {
+          throw std::runtime_error("No conversion operation found");
+        }
+        if ((!sequence.operations[i].parameter) || sequence.operations[i].parameter->GetType() != tDataType<std::string>())
+        {
+          sequence.operations[i].parameter.reset(tDataType<std::string>().CreateGenericObject());
+        }
+        stream >> sequence.operations[i].parameter->GetData<std::string>();
       }
       else
       {
